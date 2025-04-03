@@ -1,1 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataLayer Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .box { padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px; }
+        .btn { padding: 5px 10px; margin: 5px; cursor: pointer; }
+        textarea { width: 100%; height: 80px; font-family: monospace; }
+        .remove-btn { color: red; cursor: pointer; margin-left: 10px; }
+        .param-input, .event-input { width: 120px; margin-left: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .datalayer-box { background: #f9f9f9; padding: 10px; border-radius: 5px; font-size: 12px; position: relative; margin-top: 10px; }
+        .copy-btn { position: absolute; top: 5px; right: 5px; font-size: 12px; padding: 3px 6px; cursor: pointer; }
+        .download-btn { float: right; background: green; color: white; }
+        .accordion { cursor: pointer; padding: 10px; border: 1px solid #ccc; background: #f2f2f2; margin-top: 5px; border-radius: 5px; }
+        .panel { display: none; padding: 10px; border: 1px solid #ddd; margin-top: 5px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Step 1: Enter Global Parameters</h2>
+        <div class="box" id="globalParams">
+            <input type="text" placeholder="Parameter Name">
+            <button class="btn" onclick="addGlobalParam()">Add Global Parameter</button>
+            <ul id="globalParamsList"></ul>
+        </div>
 
+        <h2>Step 2: Add Event</h2>
+        <div class="box">
+            <input type="text" id="eventName" placeholder="Event Name">
+			<input type="text" id="interaction" placeholder="Interaction">
+            <button class="btn" onclick="addEvent()">Add Event</button>
+        </div>
+
+        <h2>
+            Events List 
+            <button class="btn download-btn" onclick="downloadExcel()">Download Events List</button>
+        </h2>
+        <div id="eventsContainer"></div>
+    </div>
+
+    <script>
+        let globalParams = [];
+        let events = [];
+
+        function addGlobalParam() {
+            let input = document.querySelector("#globalParams input");
+            let paramName = input.value.trim();
+            if (paramName && !globalParams.some(p => p.name === paramName)) {
+                globalParams.push({ name: paramName, value: "<<dynamic>>" });
+                input.value = "";
+                renderGlobalParams();
+            }
+        }
+
+        function removeGlobalParam(index) {
+            globalParams.splice(index, 1);
+            renderGlobalParams();
+            renderEvents();
+        }
+
+        function updateGlobalParamValue(index, value) {
+            globalParams[index].value = value;
+            renderEvents();
+        }
+
+        function renderGlobalParams() {
+            let list = document.getElementById("globalParamsList");
+            list.innerHTML = "";
+            globalParams.forEach((param, index) => {
+                let li = document.createElement("li");
+                li.innerHTML = `
+                    ${param.name}: 
+                    <input type="text" class="param-input" value="${param.value}" 
+                        onblur="updateGlobalParamValue(${index}, this.value);">
+                    <span class="remove-btn" onclick="removeGlobalParam(${index})">❌</span>
+                `;
+                list.appendChild(li);
+            });
+            renderEvents();
+        }
+
+        function addEvent() {
+            let eventName = document.getElementById("eventName").value.trim();
+			let interaction = document.getElementById("interaction").value.trim();
+			if (!eventName) return;
+    
+			let event = { 
+			name: eventName, 
+			interaction: interaction, 
+			parameters: JSON.parse(JSON.stringify(globalParams)) 
+			};
+			events.push(event);
+
+			document.getElementById("eventName").value = "";
+			document.getElementById("interaction").value = "";
+
+			renderEvents();
+        }
+
+        function removeEvent(eventIndex) {
+            events.splice(eventIndex, 1);
+            renderEvents();
+        }
+
+        function duplicateEvent(eventIndex) {
+            let duplicatedEvent = JSON.parse(JSON.stringify(events[eventIndex]));
+            duplicatedEvent.name += " (Copy)";
+            events.push(duplicatedEvent);
+            renderEvents();
+        }
+
+        function updateEventName(index, newName) {
+            events[index].name = newName;
+            renderEvents();
+        }
+		
+		function updateEventInteraction(index, newInteraction) {
+			events[index].interaction = newInteraction;
+		}
+
+
+        function addEventParameter(eventIndex) {
+            let paramName = prompt("Enter parameter name:");
+            if (paramName) {
+                events[eventIndex].parameters.push({ name: paramName, value: "<<dynamic>>" });
+                renderEvents();
+            }
+        }
+
+        function removeEventParameter(eventIndex, paramIndex) {
+            events[eventIndex].parameters.splice(paramIndex, 1);
+            renderEvents();
+        }
+
+        function updateEventParameterValue(eventIndex, paramIndex, value) {
+            events[eventIndex].parameters[paramIndex].value = value;
+            renderEvents();
+        }
+
+        function togglePanel(index) {
+            let panel = document.getElementById(`panel-${index}`);
+            panel.style.display = panel.style.display === "none" ? "block" : "none";
+        }
+
+        function renderEvents() {
+            let container = document.getElementById("eventsContainer");
+            container.innerHTML = "";
+            events.forEach((event, index) => {
+                let div = document.createElement("div");
+                div.innerHTML = `
+                    <div class="accordion" onclick="togglePanel(${index})">
+                        <input type="text" class="event-input" value="${event.name}" 
+                            onblur="updateEventName(${index}, this.value); event.stopPropagation();">
+						<input type="text" class="event-input" value="${event.interaction}" 
+							onblur="updateEventInteraction(${index}, this.value); event.stopPropagation();">	
+                        <button class="btn" onclick="duplicateEvent(${index}); event.stopPropagation();">📄 Duplicate Event</button>
+                        <button class="btn remove-btn" onclick="removeEvent(${index}); event.stopPropagation();">❌ Remove Event</button>
+                    </div>
+                    <div class="panel" id="panel-${index}" style="display:none;">
+                        <button class="btn" onclick="addEventParameter(${index})">Add Parameter</button>
+                        <table>
+                            <tr><th>Parameter Name</th><th>Value</th><th>Remove</th></tr>
+                            ${event.parameters.map((p, paramIndex) => `
+                                <tr>
+                                    <td>${p.name}</td>
+                                    <td><input type="text" class="param-input" value="${p.value}" 
+                                        onblur="updateEventParameterValue(${index}, ${paramIndex}, this.value);">
+                                    </td>
+                                    <td><span class="remove-btn" onclick="removeEventParameter(${index}, ${paramIndex})">❌</span></td>
+                                </tr>`).join("")}
+                        </table>
+                        <div class="datalayer-box">
+                            <strong>Generated DataLayer</strong>
+                            <textarea readonly>${generateEventScript(event)}</textarea>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function generateEventScript(event) {
+            let script = `window.dataLayer.push({\n  'event': '${event.name}',\n`;
+            event.parameters.forEach((param, index) => {
+                script += `  '${param.name}': '${param.value}'` + (index < event.parameters.length - 1 ? ",\n" : "\n");
+            });
+            script += "});\n";
+            return script;
+        }
+
+
+    function downloadExcel() {
+        let wb = XLSX.utils.book_new();
+
+        // Define the sheet header
+        let sheetData = [["Interaction", "Event Name" , "DataLayer Structure"]];
+
+        // Loop through each event and add its details
+        events.forEach(event => {
+            let eventScript = generateEventScript(event); // Get the DataLayer script
+
+            
+
+            // Add the event details in the new format
+            sheetData.push([event.interaction, event.name, eventScript]);
+        });
+
+        // Convert the data into a sheet and append it to the workbook
+        let ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+        // Apply text wrap styling
+        Object.keys(ws).forEach(cell => {
+            if (ws[cell] && ws[cell].s) {
+                ws[cell].s.alignment = { wrapText: true };
+            } else if (ws[cell]) {
+                ws[cell].s = { alignment: { wrapText: true } };
+            }
+        });
+
+        XLSX.utils.book_append_sheet(wb, ws, "Events List");
+
+        // Trigger the file download
+        XLSX.writeFile(wb, "Events_List.xlsx");
+    }
+
+
+    </script>
+</body>
+</html>
